@@ -31,6 +31,7 @@ from plane.app.views import (
     WorkItemDescriptionVersionEndpoint,
     IssueMetaEndpoint,
     IssueDetailIdentifierEndpoint,
+    BulkUpdateIssuesEndpoint,
 )
 
 urlpatterns = [
@@ -99,6 +100,11 @@ urlpatterns = [
         "workspaces/<str:slug>/projects/<uuid:project_id>/bulk-archive-issues/",
         BulkArchiveIssuesEndpoint.as_view(),
         name="bulk-archive-issues",
+    ),
+    path(
+        "workspaces/<str:slug>/projects/<uuid:project_id>/bulk-operation-issues/",
+        BulkUpdateIssuesEndpoint.as_view(),
+        name="bulk-operation-issues",
     ),
     ##
     path(

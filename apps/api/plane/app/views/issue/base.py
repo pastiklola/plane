@@ -7,6 +7,7 @@ import copy
 import json
 
 # Django imports
+from django.core import serializers
 from django.contrib.postgres.aggregates import ArrayAgg
 from django.contrib.postgres.fields import ArrayField
 from django.core.serializers.json import DjangoJSONEncoder
@@ -45,6 +46,7 @@ from plane.bgtasks.issue_description_version_task import issue_description_versi
 from plane.bgtasks.recent_visited_task import recent_visited_task
 from plane.bgtasks.webhook_task import model_activity
 from plane.db.models import (
+    Cycle,
     CycleIssue,
     FileAsset,
     IntakeIssue,
@@ -733,17 +735,17 @@ class ProjectUserDisplayPropertyEndpoint(BaseAPIView):
     def patch(self, request, slug, project_id):
         try:
             issue_property = ProjectUserProperty.objects.get(
-                user=request.user, 
+                user=request.user,
                 project_id=project_id
             )
         except ProjectUserProperty.DoesNotExist:
             issue_property = ProjectUserProperty.objects.create(
-                user=request.user, 
+                user=request.user,
                 project_id=project_id
             )
 
         serializer = ProjectUserPropertySerializer(
-            issue_property, 
+            issue_property,
             data=request.data,
             partial=True
         )
@@ -1353,3 +1355,283 @@ class IssueDetailIdentifierEndpoint(BaseAPIView):
         # Serialize the issue
         serializer = IssueDetailSerializer(issue, expand=self.expand)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class BulkUpdateIssuesEndpoint(BaseAPIView):
+    def get_queryset(self):
+        issues = Issue.issue_objects.filter(
+            project_id=self.kwargs.get("project_id"),
+            workspace__slug=self.kwargs.get("slug"),
+        ).distinct()
+
+        return issues
+
+    def apply_annotations(self, issues):
+        issues = (
+            issues.annotate(
+                cycle_id=Subquery(
+                    CycleIssue.objects.filter(issue=OuterRef("id"), deleted_at__isnull=True).values("cycle_id")[:1]
+                )
+            )
+            .annotate(
+                link_count=Subquery(
+                    IssueLink.objects.filter(issue=OuterRef("id"))
+                    .values("issue")
+                    .annotate(count=Count("id"))
+                    .values("count")
+                )
+            )
+            .annotate(
+                attachment_count=Subquery(
+                    FileAsset.objects.filter(
+                        issue_id=OuterRef("id"),
+                        entity_type=FileAsset.EntityTypeContext.ISSUE_ATTACHMENT,
+                    )
+                    .values("issue_id")
+                    .annotate(count=Count("id"))
+                    .values("count")
+                )
+            )
+            .annotate(
+                sub_issues_count=Subquery(
+                    Issue.issue_objects.filter(parent=OuterRef("id"))
+                    .values("parent")
+                    .annotate(count=Count("id"))
+                    .values("count")
+                )
+            )
+        )
+
+        return issues
+
+    @allow_permission([ROLE.ADMIN])
+    def post(self, request, slug, project_id):
+        issue_ids = request.data.get("issue_ids", [])
+        properties = request.data.get("properties", {})
+        cycle_id = properties.pop('cycle_id', None)
+        module_ids = properties.pop('module_ids', None)
+
+        if not len(issue_ids):
+            return Response({"error": "Issue IDs are required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        issues = []
+        if len(properties.keys()):
+            queryset = self.get_queryset()
+            queryset = self.apply_annotations(queryset)
+            issues =  (
+                queryset.annotate(
+                    label_ids=Coalesce(
+                        ArrayAgg(
+                            "labels__id",
+                            distinct=True,
+                            filter=Q(~Q(labels__id__isnull=True) & Q(label_issue__deleted_at__isnull=True)),
+                        ),
+                        Value([], output_field=ArrayField(UUIDField())),
+                    ),
+                    assignee_ids=Coalesce(
+                        ArrayAgg(
+                            "assignees__id",
+                            distinct=True,
+                            filter=Q(
+                                ~Q(assignees__id__isnull=True)
+                                & Q(assignees__member_project__is_active=True)
+                                & Q(issue_assignee__deleted_at__isnull=True)
+                            ),
+                        ),
+                        Value([], output_field=ArrayField(UUIDField())),
+                    ),
+                    module_ids=Coalesce(
+                        ArrayAgg(
+                            "issue_module__module_id",
+                            distinct=True,
+                            filter=Q(
+                                ~Q(issue_module__module_id__isnull=True)
+                                & Q(issue_module__module__archived_at__isnull=True)
+                                & Q(issue_module__deleted_at__isnull=True)
+                            ),
+                        ),
+                        Value([], output_field=ArrayField(UUIDField())),
+                    ),
+                )
+                .filter(pk__in=issue_ids)
+                .all()
+            )
+
+
+        updated_issues = []
+        for issue in issues:
+            serializer = IssueCreateSerializer(issue, data=properties, partial=True, context={"project_id": project_id})
+            current_instance = json.dumps(IssueSerializer(issue).data, cls=DjangoJSONEncoder),
+            if serializer.is_valid():
+                serializer.save()
+                updated_issues.append(issue.id)
+                issue_activity.delay(
+                    type="issue.activity.updated",
+                    requested_data=json.dumps(properties, cls=DjangoJSONEncoder),
+                    actor_id=str(request.user.id),
+                    issue_id=str(issue.id),
+                    project_id=str(project_id),
+                    current_instance=current_instance,
+                    epoch=int(timezone.now().timestamp()),
+                    notification=True,
+                    origin=base_host(request=request, is_app=True),
+                )
+                model_activity.delay(
+                    model_name="issue",
+                    model_id=str(serializer.data.get("id", None)),
+                    requested_data=properties,
+                    current_instance=current_instance,
+                    actor_id=request.user.id,
+                    slug=slug,
+                    origin=base_host(request=request, is_app=True),
+                )
+
+        if cycle_id:
+            self.update_cycle(request, slug, project_id, cycle_id, issue_ids)
+            updated_issues = issue_ids
+
+        if module_ids:
+            self.update_modules(request, slug, project_id, module_ids, issue_ids)
+            updated_issues = issue_ids
+
+        return Response({"updated_issues": updated_issues}, status=status.HTTP_200_OK)
+
+    def update_cycle(self, request, slug, project_id, cycle_id, issue_ids):
+        cycle = Cycle.objects.get(workspace__slug=slug, project_id=project_id, pk=cycle_id)
+
+        if cycle.end_date is not None and cycle.end_date < timezone.now():
+            return
+
+        # Get all CycleIssues already created
+        cycle_issues = list(CycleIssue.objects.filter(~Q(cycle_id=cycle_id), issue_id__in=issue_ids))
+        existing_issues = [str(cycle_issue.issue_id) for cycle_issue in cycle_issues]
+        new_issues = list(set(issue_ids) - set(existing_issues))
+
+        # New issues to create
+        created_records = CycleIssue.objects.bulk_create(
+            [
+                CycleIssue(
+                    project_id=project_id,
+                    workspace_id=cycle.workspace_id,
+                    created_by_id=request.user.id,
+                    updated_by_id=request.user.id,
+                    cycle_id=cycle_id,
+                    issue_id=issue,
+                )
+                for issue in new_issues
+            ],
+            batch_size=10,
+        )
+
+        # Updated Issues
+        updated_records = []
+        update_cycle_issue_activity = []
+        # Iterate over each cycle_issue in cycle_issues
+        for cycle_issue in cycle_issues:
+            old_cycle_id = cycle_issue.cycle_id
+            # Update the cycle_issue's cycle_id
+            cycle_issue.cycle_id = cycle_id
+            # Add the modified cycle_issue to the records_to_update list
+            updated_records.append(cycle_issue)
+            # Record the update activity
+            update_cycle_issue_activity.append(
+                {
+                    "old_cycle_id": str(old_cycle_id),
+                    "new_cycle_id": str(cycle_id),
+                    "issue_id": str(cycle_issue.issue_id),
+                }
+            )
+
+        # Update the cycle issues
+        CycleIssue.objects.bulk_update(updated_records, ["cycle_id"], batch_size=100)
+        # Capture Issue Activity
+        issue_activity.delay(
+            type="cycle.activity.created",
+            requested_data=json.dumps({"cycles_list": issue_ids}),
+            actor_id=str(self.request.user.id),
+            issue_id=None,
+            project_id=str(self.kwargs.get("project_id", None)),
+            current_instance=json.dumps(
+                {
+                    "updated_cycle_issues": update_cycle_issue_activity,
+                    "created_cycle_issues": serializers.serialize("json", created_records),
+                }
+            ),
+            epoch=int(timezone.now().timestamp()),
+            notification=True,
+            origin=base_host(request=request, is_app=True),
+        )
+
+
+    def update_modules(self, request, slug, project_id, modules, issue_ids, delete_others=False):
+        project = Project.objects.get(pk=project_id)
+
+        module_issues = []
+        for module in modules:
+            for issue_id in issue_ids:
+                module_issues.append(
+                    ModuleIssue(
+                        issue_id=issue_id,
+                        module_id=module,
+                        project_id=project_id,
+                        workspace_id=project.workspace_id,
+                        created_by=request.user,
+                        updated_by=request.user,
+                    )
+                )
+
+        if modules:
+            _ = ModuleIssue.objects.bulk_create(
+                module_issues,
+                batch_size=10,
+                ignore_conflicts=True,
+            )
+            # Bulk Update the activity
+            _ = [
+                issue_activity.delay(
+                    type="module.activity.created",
+                    requested_data=json.dumps({"module_id": module_issue.module_id}),
+                    actor_id=str(request.user.id),
+                    issue_id=module_issue.issue_id,
+                    project_id=project_id,
+                    current_instance=None,
+                    epoch=int(timezone.now().timestamp()),
+                    notification=True,
+                    origin=base_host(request=request, is_app=True),
+                )
+                for module_issue in module_issues
+            ]
+
+        if not delete_others:
+            return
+
+        unused_module_issues = ModuleIssue.objects.filter(
+                Q(
+                    workspace__slug=slug,
+                    project_id=project_id,
+                    issue_id__in=issue_ids,
+                ) & ~Q(module_id__in=modules)
+            ).all()
+        for module_issue in unused_module_issues:
+            issue_activity.delay(
+                type="module.activity.deleted",
+                requested_data=json.dumps({"module_id": str(module_issue.module_id)}),
+                actor_id=str(request.user.id),
+                issue_id=str(issue_id),
+                project_id=str(project_id),
+                current_instance=json.dumps(
+                    {
+                        "module_name": (
+                            module_issue.module.name
+                            if (module_issue.module)
+                            else None
+                        )
+                    }
+                ),
+                epoch=int(timezone.now().timestamp()),
+                notification=True,
+                origin=base_host(request=request, is_app=True),
+            )
+            module_issue.delete()
+
+
