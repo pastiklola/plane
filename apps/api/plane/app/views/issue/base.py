@@ -1408,6 +1408,7 @@ class BulkUpdateIssuesEndpoint(BaseAPIView):
     def post(self, request, slug, project_id):
         issue_ids = request.data.get("issue_ids", [])
         properties = request.data.get("properties", {})
+        has_cycle_id = 'cycle_id' in properties
         cycle_id = properties.pop('cycle_id', None)
         module_ids = properties.pop('module_ids', None)
 
@@ -1489,6 +1490,9 @@ class BulkUpdateIssuesEndpoint(BaseAPIView):
         if cycle_id:
             self.update_cycle(request, slug, project_id, cycle_id, issue_ids)
             updated_issues = issue_ids
+        elif has_cycle_id:
+            self.clear_cycle(request, slug, project_id, issue_ids)
+            updated_issues = issue_ids
 
         if module_ids:
             self.update_modules(request, slug, project_id, module_ids, issue_ids)
@@ -1562,6 +1566,34 @@ class BulkUpdateIssuesEndpoint(BaseAPIView):
             origin=base_host(request=request, is_app=True),
         )
 
+
+    def clear_cycle(self, request, slug, project_id, issue_ids):
+        cycle_issues = CycleIssue.objects.filter(
+                issue_id__in=issue_ids,
+                workspace__slug=slug,
+                project_id=project_id,
+            ).all()
+
+        for cycle_issue in cycle_issues:
+            issue_id = cycle_issue.issue_id
+            cycle_id = cycle_issue.cycle_id
+            issue_activity.delay(
+                type="cycle.activity.deleted",
+                requested_data=json.dumps(
+                    {
+                        "cycle_id": str(cycle_id),
+                        "issues": [str(issue_id)],
+                    }
+                ),
+                actor_id=str(request.user.id),
+                issue_id=str(issue_id),
+                project_id=str(project_id),
+                current_instance=None,
+                epoch=int(timezone.now().timestamp()),
+                notification=True,
+                origin=base_host(request=request, is_app=True),
+            )
+            cycle_issue.delete()
 
     def update_modules(self, request, slug, project_id, modules, issue_ids, delete_others=False):
         project = Project.objects.get(pk=project_id)
