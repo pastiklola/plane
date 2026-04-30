@@ -68,12 +68,14 @@ export const BulkOperationsPanel = observer(function BulkOperationsPanel({ class
     reValidateMode: "onChange",
   });
   const {
-    formState: { isDirty, dirtyFields },
+    formState: { dirtyFields },
     handleSubmit,
     reset,
     watch,
     control,
   } = methods;
+
+  const isDirty = Object.keys(dirtyFields).length > 0;
 
   const archiveBulkIssues = useCallback(
     async (issueIds: string[]) => {
@@ -156,7 +158,7 @@ export const BulkOperationsPanel = observer(function BulkOperationsPanel({ class
           title: t("success"),
           message: `Successfully updated ${propertyCountMessage} for ${issueCountMessage}`,
         });
-        return reset();
+        return reset({});
       })
       .catch(() => {
         setToast({
@@ -252,7 +254,7 @@ export const BulkOperationsPanel = observer(function BulkOperationsPanel({ class
                             variant="neutral-primary"
                             size="sm"
                             className="h-6"
-                            onClick={() => reset()}
+                            onClick={() => reset({})}
                             disabled={isUpdating}
                           >
                             Reset
