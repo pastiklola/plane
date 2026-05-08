@@ -4,9 +4,9 @@
  * See the LICENSE file for details.
  */
 
+import { APIService } from "@/services/api.service";
 import { API_BASE_URL } from "@plane/constants";
 import type { IProjectView } from "@plane/types";
-import { APIService } from "@/services/api.service";
 // types
 // helpers
 
@@ -79,6 +79,22 @@ export class ViewService extends APIService {
 
   async removeViewFromFavorites(workspaceSlug: string, projectId: string, viewId: string): Promise<any> {
     return this.delete(`/api/workspaces/${workspaceSlug}/projects/${projectId}/user-favorite-views/${viewId}/`)
+      .then((response) => response?.data)
+      .catch((error) => {
+        throw error?.response?.data;
+      });
+  }
+
+  async lockView(workspaceSlug: string, viewId: string): Promise<any> {
+    return this.post(`/api/workspaces/${workspaceSlug}/views/${viewId}/lock/`)
+      .then((response) => response?.data)
+      .catch((error) => {
+        throw error?.response?.data;
+      });
+  }
+
+  async unlockView(workspaceSlug: string, viewId: string): Promise<any> {
+    return this.delete(`/api/workspaces/${workspaceSlug}/views/${viewId}/lock/`)
       .then((response) => response?.data)
       .catch((error) => {
         throw error?.response?.data;

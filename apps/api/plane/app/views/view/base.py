@@ -43,7 +43,7 @@ from plane.db.models import (
 from plane.utils.issue_filters import issue_filters
 from plane.utils.order_queryset import order_issue_queryset
 from plane.bgtasks.recent_visited_task import recent_visited_task
-from .. import BaseViewSet
+from .. import BaseViewSet, BaseAPIView
 from plane.db.models import UserFavorite
 from plane.utils.filters import ComplexFilterBackend
 from plane.utils.filters import IssueFilterSet
@@ -310,7 +310,7 @@ class IssueViewViewSet(BaseViewSet):
         issue_view = self.get_queryset().filter(pk=pk, project_id=project_id).first()
         project = Project.objects.get(id=project_id)
         """
-        if the role is guest and guest_view_all_features is false and owned by is not 
+        if the role is guest and guest_view_all_features is false and owned by is not
         the requesting user then dont show the view
         """
 
@@ -431,3 +431,20 @@ class IssueViewFavoriteViewSet(BaseViewSet):
         )
         view_favorite.delete(soft=False)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class IssueViewLockEndpoint(BaseViewSet):
+    def toggle_lock(self, slug, pk, is_locked):
+        issue_view = IssueView.objects.get(pk=pk, workspace__slug=slug)
+        issue_view.is_locked = is_locked
+        issue_view.save()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @allow_permission([ROLE.ADMIN], creator=True, model=IssueView)
+    def lock(self, request, slug, pk):
+        return self.toggle_lock(slug, pk, True)
+
+    @allow_permission([ROLE.ADMIN], creator=True, model=IssueView)
+    def unlock(self, request, slug, pk):
+        return self.toggle_lock(slug, pk, False)
+

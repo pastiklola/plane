@@ -89,6 +89,7 @@ from .view.base import (
     WorkspaceViewIssuesViewSet,
     IssueViewViewSet,
     IssueViewFavoriteViewSet,
+    IssueViewLockEndpoint,
 )
 from .cycle.base import (
     CycleViewSet,

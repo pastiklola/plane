@@ -4,24 +4,25 @@
  * See the LICENSE file for details.
  */
 
-import { useState } from "react";
-import { observer } from "mobx-react";
 import { MoreHorizontal } from "lucide-react";
+import { observer } from "mobx-react";
+import { useState } from "react";
 // types
 import { EUserPermissions, EUserPermissionsLevel } from "@plane/constants";
 import { IconButton } from "@plane/propel/icon-button";
 import { TOAST_TYPE, setToast } from "@plane/propel/toast";
-import type { IProjectView } from "@plane/types";
+import { EViewAccess, type IProjectView } from "@plane/types";
 // ui
 import type { TContextMenuItem } from "@plane/ui";
 import { ContextMenu, CustomMenu } from "@plane/ui";
-import { copyUrlToClipboard, cn } from "@plane/utils";
+import { cn, copyUrlToClipboard } from "@plane/utils";
 // helpers
 import { useViewMenuItems } from "@/components/common/quick-actions-helper";
 // hooks
 import { useUser, useUserPermissions } from "@/hooks/store/user";
 import { PublishViewModal, useViewPublish } from "@/plane-web/components/views/publish";
 // local imports
+import { useProjectView } from "@/hooks/store/use-project-view";
 import { DeleteProjectViewModal } from "./delete-view-modal";
 import { CreateUpdateProjectViewModal } from "./modal";
 
@@ -41,6 +42,8 @@ export const ViewQuickActions = observer(function ViewQuickActions(props: Props)
   // store hooks
   const { data } = useUser();
   const { allowPermissions } = useUserPermissions();
+  const { lockView, updateView } = useProjectView();
+
   // auth
   const isOwner = view?.owned_by === data?.id;
   const isAdmin = allowPermissions([EUserPermissions.ADMIN], EUserPermissionsLevel.PROJECT, workspaceSlug, projectId);
@@ -53,13 +56,53 @@ export const ViewQuickActions = observer(function ViewQuickActions(props: Props)
   const viewLink = `${workspaceSlug}/projects/${projectId}/views/${view.id}`;
   const handleCopyText = () =>
     copyUrlToClipboard(viewLink).then(() => {
-      setToast({
+      return setToast({
         type: TOAST_TYPE.SUCCESS,
         title: "Link Copied!",
         message: "View link copied to clipboard.",
       });
     });
   const handleOpenInNewTab = () => window.open(`/${viewLink}`, "_blank");
+
+  const handleToggleLock = async () => {
+    if (!workspaceSlug) return;
+    const isLocked = !view.is_locked;
+    const action = isLocked ? "locked" : "unlocked";
+    try {
+      await lockView(workspaceSlug.toString(), view.id, isLocked);
+      setToast({
+        type: TOAST_TYPE.SUCCESS,
+        title: "Success!",
+        message: `View ${action} successfully.`,
+      });
+    } catch (_error) {
+      setToast({
+        type: TOAST_TYPE.ERROR,
+        title: "Error!",
+        message: `View could not be ${action}. Please try again.`,
+      });
+    }
+  };
+
+  const handleToggleAccess = async () => {
+    if (!workspaceSlug || !projectId) return;
+    const access = view.access === EViewAccess.PUBLIC ? EViewAccess.PRIVATE : EViewAccess.PUBLIC;
+    const accessString = view.access === EViewAccess.PRIVATE ? "public" : "private";
+    try {
+      await updateView(workspaceSlug.toString(), projectId, view.id, { access });
+      setToast({
+        type: TOAST_TYPE.SUCCESS,
+        title: "Success!",
+        message: `View access has been changed to ${accessString}.`,
+      });
+    } catch (_error) {
+      setToast({
+        type: TOAST_TYPE.ERROR,
+        title: "Error!",
+        message: `Could not change view access to ${accessString}. Please try again.`,
+      });
+    }
+  };
 
   const menuResult = useViewMenuItems({
     isOwner,
@@ -71,6 +114,8 @@ export const ViewQuickActions = observer(function ViewQuickActions(props: Props)
     handleDelete: () => setDeleteViewModal(true),
     handleCopyLink: handleCopyText,
     handleOpenInNewTab,
+    handleToggleLock,
+    handleToggleAccess,
   });
 
   // Handle both CE (array) and EE (object) return types

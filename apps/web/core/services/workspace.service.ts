@@ -6,26 +6,26 @@
 
 import { API_BASE_URL } from "@plane/constants";
 import type {
+  ILastActiveWorkspaceDetails,
+  IProductUpdateResponse,
+  IUserProjectsRole,
   IWorkspace,
-  IWorkspaceMemberMe,
+  IWorkspaceBulkInviteFormData,
   IWorkspaceMember,
   IWorkspaceMemberInvitation,
-  ILastActiveWorkspaceDetails,
+  IWorkspaceMemberMe,
   IWorkspaceSearchResults,
-  IProductUpdateResponse,
-  IWorkspaceBulkInviteFormData,
-  IWorkspaceViewProps,
-  IUserProjectsRole,
+  IWorkspaceSidebarNavigation,
+  IWorkspaceSidebarNavigationItem,
+  IWorkspaceUserPropertiesResponse,
   IWorkspaceView,
+  IWorkspaceViewProps,
+  TActivityEntityData,
   TIssuesResponse,
   TLink,
-  TSearchResponse,
   TSearchEntityRequestPayload,
+  TSearchResponse,
   TWidgetEntityData,
-  TActivityEntityData,
-  IWorkspaceSidebarNavigationItem,
-  IWorkspaceSidebarNavigation,
-  IWorkspaceUserPropertiesResponse,
 } from "@plane/types";
 // services
 import { APIService } from "@/services/api.service";
@@ -418,6 +418,22 @@ export class WorkspaceService extends APIService {
     data: Partial<IWorkspaceUserPropertiesResponse>
   ): Promise<IWorkspaceUserPropertiesResponse> {
     return this.patch(`/api/workspaces/${workspaceSlug}/user-properties/`, data)
+      .then((response) => response?.data)
+      .catch((error) => {
+        throw error?.response?.data;
+      });
+  }
+
+  async lockView(workspaceSlug: string, viewId: string): Promise<any> {
+    return this.post(`/api/workspaces/${workspaceSlug}/views/${viewId}/lock/`)
+      .then((response) => response?.data)
+      .catch((error) => {
+        throw error?.response?.data;
+      });
+  }
+
+  async unlockView(workspaceSlug: string, viewId: string): Promise<any> {
+    return this.delete(`/api/workspaces/${workspaceSlug}/views/${viewId}/lock/`)
       .then((response) => response?.data)
       .catch((error) => {
         throw error?.response?.data;

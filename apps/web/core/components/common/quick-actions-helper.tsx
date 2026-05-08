@@ -5,7 +5,7 @@
  */
 
 // types
-import type { ICycle, IModule, IProjectView, IWorkspaceView } from "@plane/types";
+import { EViewAccess, type ICycle, type IModule, type IProjectView, type IWorkspaceView } from "@plane/types";
 import type { TContextMenuItem } from "@plane/ui";
 // hooks
 import { useQuickActionsFactory } from "@/plane-web/components/common/quick-actions-factory";
@@ -49,6 +49,8 @@ interface UseViewMenuItemsProps {
   handleDelete: () => void;
   handleCopyLink: () => void;
   handleOpenInNewTab: () => void;
+  handleToggleLock: () => void;
+  handleToggleAccess: () => void;
 }
 
 interface UseLayoutMenuItemsProps {
@@ -121,7 +123,13 @@ export const useViewMenuItems = (props: UseViewMenuItemsProps): MenuResult => {
 
   // Assemble final menu items - order defined here
   const items = [
-    factory.createEditMenuItem(handlers.handleEdit, isOwner),
+    factory.createEditMenuItem(handlers.handleEdit, isOwner && !view.is_locked),
+    factory.createLockMenuItem(handlers.handleToggleLock, view.is_locked, isOwner || isAdmin),
+    factory.createAccessMenuItem(
+      handlers.handleToggleAccess,
+      view.access === EViewAccess.PRIVATE,
+      isOwner && !view.is_locked
+    ),
     factory.createOpenInNewTabMenuItem(handlers.handleOpenInNewTab),
     factory.createCopyLinkMenuItem(handlers.handleCopyLink),
     factory.createDeleteMenuItem(handlers.handleDelete, isOwner || isAdmin),

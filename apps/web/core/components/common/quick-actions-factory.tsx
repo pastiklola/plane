@@ -4,10 +4,20 @@
  * See the LICENSE file for details.
  */
 
-import { Pencil, ExternalLink, Link, Trash2, ArchiveRestoreIcon } from "lucide-react";
 import { useTranslation } from "@plane/i18n";
 import { ArchiveIcon } from "@plane/propel/icons";
 import type { TContextMenuItem } from "@plane/ui";
+import {
+  ArchiveRestoreIcon,
+  Earth,
+  ExternalLink,
+  Link,
+  Lock,
+  LockKeyhole,
+  Pencil,
+  Trash2,
+  UnlockKeyhole,
+} from "lucide-react";
 
 /**
  * Unified factory for creating menu items across all entities (cycles, modules, views, epics)
@@ -83,6 +93,30 @@ export const useQuickActionsFactory = () => {
       title: "Copy link",
       icon: Link,
       action: handler,
+    }),
+
+    createLockMenuItem: (
+      handler: () => void,
+      isLocked: boolean = false,
+      shouldRender: boolean = true
+    ): TContextMenuItem => ({
+      key: "lock",
+      title: isLocked ? "Unlock" : "Lock",
+      icon: isLocked ? UnlockKeyhole : LockKeyhole,
+      action: handler,
+      shouldRender,
+    }),
+
+    createAccessMenuItem: (
+      handler: () => void,
+      isPrivate: boolean = false,
+      shouldRender: boolean = true
+    ): TContextMenuItem => ({
+      key: "access",
+      title: isPrivate ? "Make public" : "Make private",
+      icon: isPrivate ? Earth : Lock,
+      action: handler,
+      shouldRender,
     }),
   };
 };

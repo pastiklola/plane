@@ -5,7 +5,7 @@
  */
 
 import { set } from "lodash-es";
-import { observable, action, makeObservable, runInAction, computed } from "mobx";
+import { action, computed, makeObservable, observable, runInAction } from "mobx";
 import { computedFn } from "mobx-utils";
 // types
 import type { IProjectView, TViewFilters } from "@plane/types";
@@ -47,6 +47,7 @@ export interface IProjectViewStore {
   // favorites actions
   addViewToFavorites: (workspaceSlug: string, projectId: string, viewId: string) => Promise<any>;
   removeViewFromFavorites: (workspaceSlug: string, projectId: string, viewId: string) => Promise<any>;
+  lockView: (workspaceSlug: string, viewId: string, isLocked: boolean) => Promise<any>;
 }
 
 export class ProjectViewStore implements IProjectViewStore {
@@ -247,7 +248,7 @@ export class ProjectViewStore implements IProjectViewStore {
    */
   deleteView = async (workspaceSlug: string, projectId: string, viewId: string): Promise<any> => {
     await this.viewService.deleteView(workspaceSlug, projectId, viewId).then(() => {
-      runInAction(() => {
+      return runInAction(() => {
         delete this.viewMap[viewId];
         if (this.rootStore.favorite.entityMap[viewId]) this.rootStore.favorite.removeFavoriteFromStore(viewId);
       });
@@ -303,5 +304,24 @@ export class ProjectViewStore implements IProjectViewStore {
         set(this.viewMap, [viewId, "is_favorite"], true);
       });
     }
+  };
+
+  /**
+   * Lock or unlock view
+   * @param workspaceSlug
+   * @param viewId
+   * @param isLocked
+   * @returns
+   */
+  lockView = async (workspaceSlug: string, viewId: string, isLocked: boolean): Promise<any> => {
+    const promise = isLocked
+      ? this.viewService.lockView(workspaceSlug, viewId)
+      : this.viewService.unlockView(workspaceSlug, viewId);
+
+    await promise.then(() => {
+      return runInAction(() => {
+        set(this.viewMap, [viewId, "is_locked"], isLocked);
+      });
+    });
   };
 }

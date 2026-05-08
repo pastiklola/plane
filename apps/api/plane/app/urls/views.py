@@ -10,6 +10,7 @@ from plane.app.views import (
     WorkspaceViewViewSet,
     WorkspaceViewIssuesViewSet,
     IssueViewFavoriteViewSet,
+    IssueViewLockEndpoint,
 )
 
 
@@ -62,5 +63,10 @@ urlpatterns = [
         "workspaces/<str:slug>/projects/<uuid:project_id>/user-favorite-views/<uuid:view_id>/",
         IssueViewFavoriteViewSet.as_view({"delete": "destroy"}),
         name="user-favorite-view",
+    ),
+    path(
+        "workspaces/<str:slug>/views/<uuid:pk>/lock/",
+        IssueViewLockEndpoint.as_view({"post": "lock", "delete": "unlock"}),
+        name="global-view-lock",
     ),
 ]

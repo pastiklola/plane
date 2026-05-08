@@ -4,7 +4,7 @@
  * See the LICENSE file for details.
  */
 
-import { set, cloneDeep, isEqual } from "lodash-es";
+import { cloneDeep, isEqual, set } from "lodash-es";
 import { action, computed, makeObservable, observable, runInAction } from "mobx";
 import { computedFn } from "mobx-utils";
 // plane imports
@@ -34,6 +34,7 @@ export interface IGlobalViewStore {
     shouldSyncFilters?: boolean
   ) => Promise<IWorkspaceView | undefined>;
   deleteGlobalView: (workspaceSlug: string, viewId: string) => Promise<any>;
+  lockGlobalView: (workspaceSlug: string, viewId: string, isLocked: boolean) => Promise<any>;
 }
 
 export class GlobalViewStore implements IGlobalViewStore {
@@ -196,8 +197,27 @@ export class GlobalViewStore implements IGlobalViewStore {
    */
   deleteGlobalView = async (workspaceSlug: string, viewId: string): Promise<any> =>
     await this.workspaceService.deleteView(workspaceSlug, viewId).then(() => {
-      runInAction(() => {
+      return runInAction(() => {
         delete this.globalViewMap[viewId];
       });
     });
+
+  /**
+   * Lock or unlock view
+   * @param workspaceSlug
+   * @param viewId
+   * @param isLocked
+   * @returns
+   */
+  lockGlobalView = async (workspaceSlug: string, viewId: string, isLocked: boolean): Promise<any> => {
+    const promise = isLocked
+      ? this.workspaceService.lockView(workspaceSlug, viewId)
+      : this.workspaceService.unlockView(workspaceSlug, viewId);
+
+    await promise.then(() => {
+      return runInAction(() => {
+        set(this.globalViewMap, [viewId, "is_locked"], isLocked);
+      });
+    });
+  };
 }
