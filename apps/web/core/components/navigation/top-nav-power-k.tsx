@@ -210,7 +210,7 @@ export const TopNavPowerK = observer(() => {
 
   return (
     <>
-      <div className="mr-2">
+      <div className="mr-2 lg:hidden">
         <AppSidebarItem
           variant="button"
           item={{
