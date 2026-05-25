@@ -82,6 +82,7 @@ def upload_to_s3(zip_file: io.BytesIO, workspace_id: UUID, token_id: str, slug: 
         if settings.AWS_S3_ENDPOINT_URL:
             s3 = boto3.client(
                 "s3",
+                region_name=settings.AWS_REGION,
                 endpoint_url=settings.AWS_S3_ENDPOINT_URL,
                 aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
                 aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
