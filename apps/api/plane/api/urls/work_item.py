@@ -17,6 +17,7 @@ from plane.api.views import (
     IssueAttachmentDetailAPIEndpoint,
     WorkspaceIssueAPIEndpoint,
     IssueSearchEndpoint,
+    IssueAdvancedSearchEndpoint,
     IssueRelationListCreateAPIEndpoint,
 )
 
@@ -86,6 +87,13 @@ old_url_patterns = [
 
 # New url patterns with work-items as the prefix
 new_url_patterns = [
+    # Must be registered before the by-identifier pattern below, otherwise
+    # "advanced-search" matches <project_identifier>-<issue_identifier>.
+    path(
+        "workspaces/<str:slug>/work-items/advanced-search/",
+        IssueAdvancedSearchEndpoint.as_view(http_method_names=["post"]),
+        name="work-item-advanced-search",
+    ),
     path(
         "workspaces/<str:slug>/work-items/search/",
         IssueSearchEndpoint.as_view(http_method_names=["get"]),

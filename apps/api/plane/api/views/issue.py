@@ -83,7 +83,9 @@ from plane.utils.path_validator import sanitize_filename
 from plane.bgtasks.storage_metadata_task import get_asset_object_metadata
 from .base import BaseAPIView
 from plane.utils.host import base_host
+from plane.utils.filters import ComplexFilterBackend, IssueFilterSet
 from plane.utils.issue_relation_mapper import get_actual_relation
+from plane.utils.issue_search import search_issues
 from plane.bgtasks.webhook_task import model_activity
 from plane.app.permissions import ROLE
 from plane.utils.openapi import (
@@ -2259,6 +2261,171 @@ class IssueSearchEndpoint(BaseAPIView):
         )[: int(limit)]
 
         return Response({"issues": issue_results}, status=status.HTTP_200_OK)
+
+
+class IssueAdvancedSearchEndpoint(BaseAPIView):
+    """Advanced search across work items with text query and structured filters"""
+
+    filter_backends = (ComplexFilterBackend,)
+    filterset_class = IssueFilterSet
+    use_read_replica = True
+
+    @extend_schema(
+        operation_id="advanced_search_work_items",
+        summary="Advanced search work items",
+        description="Search for work items with advanced filters and search query. Supports workspace-wide or project-specific search.",  # noqa: E501
+        tags=["Work Items"],
+        parameters=[WORKSPACE_SLUG_PARAMETER],
+        request=OpenApiRequest(
+            request={
+                "application/json": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "Search query string for text-based search across work item fields",
+                        },
+                        "filters": {
+                            "type": "object",
+                            "description": "Filter JSON passed through to IssueFilterSet for validation and application",
+                        },
+                        "limit": {
+                            "type": "integer",
+                            "description": "Maximum number of results to return",
+                            "default": 10,
+                        },
+                        "workspace_search": {
+                            "type": "boolean",
+                            "description": "Whether to search across all projects in the workspace",
+                            "default": False,
+                        },
+                        "project_id": {
+                            "type": "string",
+                            "description": "Optional project ID to filter results to a specific project",
+                        },
+                    },
+                }
+            },
+            examples=[
+                OpenApiExample(
+                    name="Advanced search request",
+                    value={
+                        "query": "login",
+                        "project_id": "550e8400-e29b-41d4-a716-446655440000",
+                        "limit": 10,
+                    },
+                ),
+                OpenApiExample(
+                    name="Advanced search with filters",
+                    value={
+                        "query": "login",
+                        "filters": {"priority__in": ["high", "urgent"]},
+                        "workspace_search": True,
+                        "limit": 10,
+                    },
+                ),
+            ],
+        ),
+        responses={
+            200: OpenApiResponse(
+                description="Advanced search results",
+                response={
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "string", "format": "uuid"},
+                            "name": {"type": "string"},
+                            "sequence_id": {"type": "integer"},
+                            "project_identifier": {"type": "string"},
+                            "project_id": {"type": "string", "format": "uuid"},
+                            "workspace_id": {"type": "string", "format": "uuid"},
+                            "type_id": {"type": "string", "format": "uuid"},
+                            "state_id": {"type": "string", "format": "uuid"},
+                            "priority": {"type": "string"},
+                            "target_date": {"type": "string", "nullable": True},
+                            "start_date": {"type": "string", "nullable": True},
+                        },
+                    },
+                },
+                examples=[
+                    OpenApiExample(
+                        name="Advanced search results",
+                        value=[
+                            {
+                                "id": "550e8400-e29b-41d4-a716-446655440000",
+                                "name": "Example Name",
+                                "sequence_id": 102,
+                                "project_identifier": "WEB",
+                                "project_id": "550e8400-e29b-41d4-a716-446655440000",
+                                "workspace_id": "550e8400-e29b-41d4-a716-446655440000",
+                                "type_id": "550e8400-e29b-41d4-a716-446655440000",
+                                "state_id": "550e8400-e29b-41d4-a716-446655440000",
+                                "priority": "high",
+                                "target_date": "2024-01-01",
+                                "start_date": "2024-01-01",
+                            }
+                        ],
+                    )
+                ],
+            ),
+            400: BAD_SEARCH_REQUEST_RESPONSE,
+            401: UNAUTHORIZED_RESPONSE,
+            403: FORBIDDEN_RESPONSE,
+            404: WORKSPACE_NOT_FOUND_RESPONSE,
+        },
+    )
+    def post(self, request, slug):
+        """Advanced search work items
+
+        Search for work items with a text query and structured filter JSON.
+        Supports workspace-wide or project-specific search with a result limit.
+        """
+        query = request.data.get("query")
+        filters = request.data.get("filters")
+        project_id = request.data.get("project_id")
+        workspace_search = request.data.get("workspace_search", False)
+
+        try:
+            limit = int(request.data.get("limit", 10))
+        except (TypeError, ValueError):
+            return Response({"error": "Invalid limit"}, status=status.HTTP_400_BAD_REQUEST)
+
+        issues = Issue.issue_objects.filter(
+            workspace__slug=slug,
+            project__project_projectmember__member=self.request.user,
+            project__project_projectmember__is_active=True,
+            project__archived_at__isnull=True,
+        )
+
+        if not workspace_search and project_id:
+            issues = issues.filter(project_id=project_id)
+
+        if query:
+            issues = search_issues(query, issues)
+
+        if filters:
+            issues = ComplexFilterBackend().filter_queryset(request, issues, self, filter_data=filters)
+
+        issue_results = (
+            issues.distinct()
+            .order_by("-created_at")[: max(limit, 0)]
+            .values(
+                "id",
+                "name",
+                "sequence_id",
+                project_identifier=F("project__identifier"),
+                "project_id",
+                "workspace_id",
+                "type_id",
+                "state_id",
+                "priority",
+                "target_date",
+                "start_date",
+            )
+        )
+
+        return Response(list(issue_results), status=status.HTTP_200_OK)
 
 
 class IssueRelationListCreateAPIEndpoint(BaseAPIView):
