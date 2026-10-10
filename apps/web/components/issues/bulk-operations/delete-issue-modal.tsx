@@ -10,9 +10,9 @@ import { useEffect, useState } from "react";
 // types
 import { EUserPermissions, EUserPermissionsLevel, PROJECT_ERROR_MESSAGES } from "@plane/constants";
 import { useTranslation } from "@plane/i18n";
-import { TOAST_TYPE, setToast } from "@plane/propel/toast";
+import { setToast } from "@plane/blocks/toast";
 // ui
-import { AlertModalCore } from "@plane/ui";
+import { ConfirmDialog } from "@plane/blocks/dialog";
 // constants
 // hooks
 import { useMultipleSelectStore } from "@/hooks/store/use-multiple-select-store";
@@ -26,10 +26,10 @@ type Props = {
   onSubmit?: () => Promise<void>;
 };
 
-export const BulkArchiveIssueModal = observer(function BulkArchiveIssueModal(props: Props) {
+export const BulkDeleteIssueModal = observer(function BulkDeleteIssueModal(props: Props) {
   const { isOpen, handleClose, onSubmit } = props;
   // states
-  const [isLoading, setIsLoading] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   // store hooks
   const { workspaceSlug } = useParams();
   const { currentProjectDetails: projectDetails } = useProject();
@@ -38,7 +38,7 @@ export const BulkArchiveIssueModal = observer(function BulkArchiveIssueModal(pro
   const { selectedEntityIds } = useMultipleSelectStore();
 
   useEffect(() => {
-    setIsLoading(false);
+    setIsDeleting(false);
   }, [isOpen]);
 
   if (!selectedEntityIds.length) return null;
@@ -51,17 +51,17 @@ export const BulkArchiveIssueModal = observer(function BulkArchiveIssueModal(pro
   );
 
   const onClose = () => {
-    setIsLoading(false);
+    setIsDeleting(false);
     handleClose();
   };
 
-  const handleSubmit = async () => {
-    setIsLoading(true);
+  const handleIssueDelete = async () => {
+    setIsDeleting(true);
 
     if (!authorized) {
       setToast({
         title: t(PROJECT_ERROR_MESSAGES.permissionError.i18n_title),
-        type: TOAST_TYPE.ERROR,
+        type: "error",
         message:
           PROJECT_ERROR_MESSAGES.permissionError.i18n_message && t(PROJECT_ERROR_MESSAGES.permissionError.i18n_message),
       });
@@ -72,41 +72,38 @@ export const BulkArchiveIssueModal = observer(function BulkArchiveIssueModal(pro
       await onSubmit()
         .then(() => {
           setToast({
-            type: TOAST_TYPE.SUCCESS,
-            title: t("issue.archive.success.label"),
-            message: t("issue.archive.success.message"),
+            type: "success",
+            title: t("common.success"),
+            message: t("entity.delete.success", {
+              entity: t("common.work_item"),
+            }),
           });
           return onClose();
         })
         .catch(() => {
+          const currentError = PROJECT_ERROR_MESSAGES.issueDeleteError;
           setToast({
-            title: t("common.error.label"),
-            type: TOAST_TYPE.ERROR,
-            message: t("common.error.message"),
+            title: t(currentError.i18n_title),
+            type: "error",
+            message: currentError.i18n_message && t(currentError.i18n_message),
           });
         })
         .finally(() => onClose());
   };
 
   return (
-    <AlertModalCore
+    <ConfirmDialog
       handleClose={onClose}
-      handleSubmit={handleSubmit}
-      isSubmitting={isLoading}
+      handleSubmit={handleIssueDelete}
+      isSubmitting={isDeleting}
       isOpen={isOpen}
-      variant="primary"
-      primaryButtonText={{
-        default: t("common.archive"),
-        loading: t("common.archiving"),
-      }}
-      hideIcon
-      title={`${t("common.archive")} ${t("common.work_item")}`}
+      title={t("entity.delete.label", { entity: t("common.work_item") })}
       content={
         <>
           {/* TODO: Translate here */}
-          {`Are you sure you want to archive `}
+          {`Are you sure you want to delete `}
           {selectedEntityIds.length === 1 ? `1 work item` : `${selectedEntityIds.length} work items`}
-          {`? Once archived it can be restored later via the archives section.`}
+          {`? Sub work items of selected work items will also be deleted. All of the data related to the work items will be permanently removed. This action cannot be undone.`}
         </>
       }
     />

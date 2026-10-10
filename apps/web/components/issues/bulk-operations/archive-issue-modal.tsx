@@ -10,9 +10,9 @@ import { useEffect, useState } from "react";
 // types
 import { EUserPermissions, EUserPermissionsLevel, PROJECT_ERROR_MESSAGES } from "@plane/constants";
 import { useTranslation } from "@plane/i18n";
-import { TOAST_TYPE, setToast } from "@plane/propel/toast";
+import { setToast } from "@plane/blocks/toast";
 // ui
-import { AlertModalCore } from "@plane/ui";
+import { ConfirmDialog } from "@plane/blocks/dialog";
 // constants
 // hooks
 import { useMultipleSelectStore } from "@/hooks/store/use-multiple-select-store";
@@ -26,10 +26,10 @@ type Props = {
   onSubmit?: () => Promise<void>;
 };
 
-export const BulkDeleteIssueModal = observer(function BulkDeleteIssueModal(props: Props) {
+export const BulkArchiveIssueModal = observer(function BulkArchiveIssueModal(props: Props) {
   const { isOpen, handleClose, onSubmit } = props;
   // states
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   // store hooks
   const { workspaceSlug } = useParams();
   const { currentProjectDetails: projectDetails } = useProject();
@@ -38,7 +38,7 @@ export const BulkDeleteIssueModal = observer(function BulkDeleteIssueModal(props
   const { selectedEntityIds } = useMultipleSelectStore();
 
   useEffect(() => {
-    setIsDeleting(false);
+    setIsLoading(false);
   }, [isOpen]);
 
   if (!selectedEntityIds.length) return null;
@@ -51,17 +51,17 @@ export const BulkDeleteIssueModal = observer(function BulkDeleteIssueModal(props
   );
 
   const onClose = () => {
-    setIsDeleting(false);
+    setIsLoading(false);
     handleClose();
   };
 
-  const handleIssueDelete = async () => {
-    setIsDeleting(true);
+  const handleSubmit = async () => {
+    setIsLoading(true);
 
     if (!authorized) {
       setToast({
         title: t(PROJECT_ERROR_MESSAGES.permissionError.i18n_title),
-        type: TOAST_TYPE.ERROR,
+        type: "error",
         message:
           PROJECT_ERROR_MESSAGES.permissionError.i18n_message && t(PROJECT_ERROR_MESSAGES.permissionError.i18n_message),
       });
@@ -72,38 +72,41 @@ export const BulkDeleteIssueModal = observer(function BulkDeleteIssueModal(props
       await onSubmit()
         .then(() => {
           setToast({
-            type: TOAST_TYPE.SUCCESS,
-            title: t("common.success"),
-            message: t("entity.delete.success", {
-              entity: t("common.work_item"),
-            }),
+            type: "success",
+            title: t("issue.archive.success.label"),
+            message: t("issue.archive.success.message"),
           });
           return onClose();
         })
         .catch(() => {
-          const currentError = PROJECT_ERROR_MESSAGES.issueDeleteError;
           setToast({
-            title: t(currentError.i18n_title),
-            type: TOAST_TYPE.ERROR,
-            message: currentError.i18n_message && t(currentError.i18n_message),
+            title: t("common.error.label"),
+            type: "error",
+            message: t("common.error.message"),
           });
         })
         .finally(() => onClose());
   };
 
   return (
-    <AlertModalCore
+    <ConfirmDialog
       handleClose={onClose}
-      handleSubmit={handleIssueDelete}
-      isSubmitting={isDeleting}
+      handleSubmit={handleSubmit}
+      isSubmitting={isLoading}
       isOpen={isOpen}
-      title={t("entity.delete.label", { entity: t("common.work_item") })}
+      variant="primary"
+      primaryButtonText={{
+        default: t("common.archive"),
+        loading: t("common.archiving"),
+      }}
+      hideIcon
+      title={`${t("common.archive")} ${t("common.work_item")}`}
       content={
         <>
           {/* TODO: Translate here */}
-          {`Are you sure you want to delete `}
+          {`Are you sure you want to archive `}
           {selectedEntityIds.length === 1 ? `1 work item` : `${selectedEntityIds.length} work items`}
-          {`? Sub work items of selected work items will also be deleted. All of the data related to the work items will be permanently removed. This action cannot be undone.`}
+          {`? Once archived it can be restored later via the archives section.`}
         </>
       }
     />

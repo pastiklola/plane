@@ -4,7 +4,8 @@
  * See the LICENSE file for details.
  */
 
-import { ETabIndices, EUserPermissions, EUserPermissionsLevel } from "@plane/constants";
+import { ETabIndices } from "@plane/constants";
+import { DateSelect } from "@plane/blocks/property-select";
 import { useTranslation } from "@plane/i18n";
 import { observer } from "mobx-react";
 import type { Control } from "react-hook-form";
@@ -14,51 +15,41 @@ import type { TBulkIssueProperties } from "@plane/types";
 // ui
 import { getDate, getTabIndex, renderFormattedPayloadDate } from "@plane/utils";
 // components
-import { CycleDropdown } from "@/components/dropdowns/cycle";
-import { DateDropdown } from "@/components/dropdowns/date";
-import { EstimateDropdown } from "@/components/dropdowns/estimate";
-import { MemberDropdown } from "@/components/dropdowns/member/dropdown";
-import { ModuleDropdown } from "@/components/dropdowns/module/dropdown";
-import { PriorityDropdown } from "@/components/dropdowns/priority";
-import { StateDropdown } from "@/components/dropdowns/state/dropdown";
-import { IssueLabelSelect } from "@/components/issues/select";
-// helpers
+import { CycleSelect } from "@/components/dropdowns/cycle/cycle-select";
+import { EstimateSelect } from "@/components/dropdowns/estimate/estimate-select";
+import { LabelSelect } from "@/components/dropdowns/label/label-select";
+import { MemberSelect } from "@/components/dropdowns/member/member-select";
+import { ModuleSelect } from "@/components/dropdowns/module/module-select";
+import { PrioritySelect } from "@/components/dropdowns/priority/priority-select";
+import { StateSelect } from "@/components/dropdowns/state/state-select";
 // hooks
 import { useProject } from "@/hooks/store/use-project";
-import { useUserPermissions } from "@/hooks/store/user";
+import { useProjectEstimates } from "@/hooks/store/estimates";
 import { usePlatformOS } from "@/hooks/use-platform-os";
-// plane web components
 
 type TBulkIssuePropertiesProps = {
   control: Control<TBulkIssueProperties>;
   projectId: string | null;
-  workspaceSlug: string;
   startDate: string | null;
   targetDate: string | null;
   handleFormChange: () => void;
 };
 
 export const BulkIssueProperties = observer(function BulkIssueProperties(props: TBulkIssuePropertiesProps) {
-  const { control, projectId, workspaceSlug, startDate, targetDate, handleFormChange } = props;
+  const { control, projectId, startDate, targetDate, handleFormChange } = props;
   // store hooks
   const { t } = useTranslation();
   const { getProjectById } = useProject();
+  const { areEstimateEnabledByProjectId } = useProjectEstimates();
   const { isMobile } = usePlatformOS();
-  const { allowPermissions } = useUserPermissions();
   // derived values
   const projectDetails = getProjectById(projectId);
-  const isEstimateEnabled = Boolean(projectDetails?.estimate);
+  const isEstimateEnabled = projectId ? areEstimateEnabledByProjectId(projectId) : false;
 
   const { getIndex } = getTabIndex(ETabIndices.ISSUE_FORM, isMobile);
 
-  const canCreateLabel =
-    projectId && allowPermissions([EUserPermissions.ADMIN], EUserPermissionsLevel.PROJECT, workspaceSlug, projectId);
-
   const minDate = getDate(startDate);
-  minDate?.setDate(minDate.getDate());
-
   const maxDate = getDate(targetDate);
-  maxDate?.setDate(maxDate.getDate());
 
   return (
     <div className="flex h-full items-center gap-3">
@@ -67,18 +58,16 @@ export const BulkIssueProperties = observer(function BulkIssueProperties(props: 
         name="state_id"
         render={({ field: { value, onChange } }) => (
           <div className="block h-full">
-            <StateDropdown
+            <StateSelect
               value={value}
               onChange={(stateId) => {
                 onChange(value === stateId ? undefined : stateId);
                 handleFormChange();
               }}
               projectId={projectId ?? undefined}
-              buttonVariant="border-with-text"
+              variant="pill-md"
               tabIndex={getIndex("state_id")}
-              isForWorkItemCreation={true}
-              showDefaultState={false}
-              placement="top-start"
+              placeholder={t("state")}
             />
           </div>
         )}
@@ -88,15 +77,14 @@ export const BulkIssueProperties = observer(function BulkIssueProperties(props: 
         name="priority"
         render={({ field: { value, onChange } }) => (
           <div className="block h-full">
-            <PriorityDropdown
+            <PrioritySelect
               value={value}
               onChange={(priority) => {
                 onChange(priority);
                 handleFormChange();
               }}
-              buttonVariant="border-with-text"
+              variant="pill-md"
               tabIndex={getIndex("priority")}
-              placement="top-start"
             />
           </div>
         )}
@@ -106,17 +94,16 @@ export const BulkIssueProperties = observer(function BulkIssueProperties(props: 
         name="assignee_ids"
         render={({ field: { value, onChange } }) => (
           <div className="block h-full">
-            <MemberDropdown
+            <MemberSelect
               projectId={projectId ?? undefined}
-              value={value}
+              value={value ?? []}
               onChange={(assigneeIds) => {
                 onChange(assigneeIds);
                 handleFormChange();
               }}
-              buttonVariant={value?.length > 0 ? "transparent-without-text" : "border-with-text"}
-              buttonClassName={value?.length > 0 ? "hover:bg-transparent" : ""}
               placeholder={t("assignees")}
               multiple
+              variant={(value ?? []).length > 0 ? "avatar-group-md" : "pill-md"}
               tabIndex={getIndex("assignee_ids")}
             />
           </div>
@@ -127,16 +114,16 @@ export const BulkIssueProperties = observer(function BulkIssueProperties(props: 
         name="label_ids"
         render={({ field: { value, onChange } }) => (
           <div className="block h-full">
-            <IssueLabelSelect
-              value={value}
+            <LabelSelect
+              value={value ?? []}
               onChange={(labelIds) => {
                 onChange(labelIds);
                 handleFormChange();
               }}
               projectId={projectId ?? undefined}
+              variant="pill-md"
+              placeholder={t("labels")}
               tabIndex={getIndex("label_ids")}
-              createLabelEnabled={!!canCreateLabel}
-              placement="top-start"
             />
           </div>
         )}
@@ -146,15 +133,17 @@ export const BulkIssueProperties = observer(function BulkIssueProperties(props: 
         name="start_date"
         render={({ field: { value, onChange } }) => (
           <div className="block h-full">
-            <DateDropdown
-              value={value}
+            <DateSelect
+              value={(value ? getDate(value) : null) ?? null}
               onChange={(date) => {
                 onChange(date ? renderFormattedPayloadDate(date) : null);
                 handleFormChange();
               }}
-              buttonVariant="border-with-text"
+              variant="pill-md"
               maxDate={maxDate ?? undefined}
               placeholder={t("start_date")}
+              clearable
+              clearLabel={t("common.clear")}
               tabIndex={getIndex("start_date")}
             />
           </div>
@@ -165,15 +154,17 @@ export const BulkIssueProperties = observer(function BulkIssueProperties(props: 
         name="target_date"
         render={({ field: { value, onChange } }) => (
           <div className="block h-full">
-            <DateDropdown
-              value={value}
+            <DateSelect
+              value={(value ? getDate(value) : null) ?? null}
               onChange={(date) => {
                 onChange(date ? renderFormattedPayloadDate(date) : null);
                 handleFormChange();
               }}
-              buttonVariant="border-with-text"
+              variant="pill-md"
               minDate={minDate ?? undefined}
               placeholder={t("due_date")}
+              clearable
+              clearLabel={t("common.clear")}
               tabIndex={getIndex("target_date")}
             />
           </div>
@@ -185,7 +176,7 @@ export const BulkIssueProperties = observer(function BulkIssueProperties(props: 
           name="cycle_id"
           render={({ field: { value, onChange } }) => (
             <div className="block h-full">
-              <CycleDropdown
+              <CycleSelect
                 projectId={projectId ?? undefined}
                 onChange={(cycleId) => {
                   onChange(cycleId);
@@ -193,21 +184,20 @@ export const BulkIssueProperties = observer(function BulkIssueProperties(props: 
                 }}
                 placeholder={t("cycle.label", { count: 1 })}
                 value={value}
-                buttonVariant="border-with-text"
+                variant="pill-md"
                 tabIndex={getIndex("cycle_id")}
-                placement="top-start"
               />
             </div>
           )}
         />
       )}
-      {projectDetails?.module_view && workspaceSlug && (
+      {projectDetails?.module_view && (
         <Controller
           control={control}
           name="module_ids"
           render={({ field: { value, onChange } }) => (
             <div className="block h-full">
-              <ModuleDropdown
+              <ModuleSelect
                 projectId={projectId ?? undefined}
                 value={value ?? []}
                 onChange={(moduleIds) => {
@@ -215,11 +205,9 @@ export const BulkIssueProperties = observer(function BulkIssueProperties(props: 
                   handleFormChange();
                 }}
                 placeholder={t("modules")}
-                buttonVariant="border-with-text"
-                tabIndex={getIndex("module_ids")}
+                variant="pill-md"
                 multiple
-                showCount
-                placement="top-start"
+                tabIndex={getIndex("module_ids")}
               />
             </div>
           )}
@@ -231,17 +219,16 @@ export const BulkIssueProperties = observer(function BulkIssueProperties(props: 
           name="estimate_point"
           render={({ field: { value, onChange } }) => (
             <div className="block h-full">
-              <EstimateDropdown
+              <EstimateSelect
                 value={value || undefined}
                 onChange={(estimatePoint) => {
                   onChange(estimatePoint);
                   handleFormChange();
                 }}
                 projectId={projectId}
-                buttonVariant="border-with-text"
+                variant="pill-md"
                 tabIndex={getIndex("estimate_point")}
                 placeholder={t("estimate")}
-                placement="top-start"
               />
             </div>
           )}

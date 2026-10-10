@@ -10,9 +10,9 @@ import { useEffect, useState } from "react";
 // types
 import { EUserPermissions, EUserPermissionsLevel, PROJECT_ERROR_MESSAGES } from "@plane/constants";
 import { useTranslation } from "@plane/i18n";
-import { TOAST_TYPE, setToast } from "@plane/propel/toast";
+import { setToast } from "@plane/blocks/toast";
 // ui
-import { AlertModalCore } from "@plane/ui";
+import { ConfirmDialog } from "@plane/blocks/dialog";
 // constants
 // hooks
 import { useMultipleSelectStore } from "@/hooks/store/use-multiple-select-store";
@@ -61,7 +61,7 @@ export const BulkSubscribeIssueModal = observer(function BulkSubscribeIssueModal
     if (!authorized) {
       setToast({
         title: t(PROJECT_ERROR_MESSAGES.permissionError.i18n_title),
-        type: TOAST_TYPE.ERROR,
+        type: "error",
         message:
           PROJECT_ERROR_MESSAGES.permissionError.i18n_message && t(PROJECT_ERROR_MESSAGES.permissionError.i18n_message),
       });
@@ -72,7 +72,7 @@ export const BulkSubscribeIssueModal = observer(function BulkSubscribeIssueModal
       await onSubmit()
         .then(() => {
           setToast({
-            type: TOAST_TYPE.SUCCESS,
+            type: "success",
             title: t("common.success"),
             message: t("issue.subscription.actions.subscribed"),
           });
@@ -81,7 +81,7 @@ export const BulkSubscribeIssueModal = observer(function BulkSubscribeIssueModal
         .catch(() => {
           setToast({
             title: t("common.error.label"),
-            type: TOAST_TYPE.ERROR,
+            type: "error",
             message: t("common.error.message"),
           });
         })
@@ -89,7 +89,7 @@ export const BulkSubscribeIssueModal = observer(function BulkSubscribeIssueModal
   };
 
   return (
-    <AlertModalCore
+    <ConfirmDialog
       handleClose={onClose}
       handleSubmit={handleSubmit}
       isSubmitting={isLoading}

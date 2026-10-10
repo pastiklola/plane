@@ -2,20 +2,20 @@ import { useIssueDetail } from "@/hooks/store/use-issue-detail";
 import { useIssues } from "@/hooks/store/use-issues";
 import { useMultipleSelectStore } from "@/hooks/store/use-multiple-select-store";
 import { useProjectState } from "@/hooks/store/use-project-state";
+import { Checkbox } from "@makeplane/propel/components/checkbox";
+import { Button } from "@makeplane/propel/components/button";
+import { Tooltip } from "@makeplane/propel/components/tooltip";
+import { ArchiveOutline, DeleteOutline, SubscribeOutline } from "@makeplane/propel/icons";
 import { ARCHIVABLE_STATE_GROUPS } from "@plane/constants";
+import { setToast } from "@plane/blocks/toast";
 import { useTranslation } from "@plane/i18n";
-import { ArchiveIcon, TrashIcon } from "@plane/propel/icons";
-import { setToast, TOAST_TYPE } from "@plane/propel/toast";
-import { Tooltip } from "@plane/propel/tooltip";
 import {
   EIssueServiceType,
   EIssuesStoreType,
   type TBulkIssueProperties,
   type TBulkOperationsPayload,
 } from "@plane/types";
-import { Button, Checkbox } from "@plane/ui";
 import { cn } from "@plane/utils";
-import { BellRingIcon } from "lucide-react";
 import { observer } from "mobx-react";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
@@ -105,7 +105,7 @@ export const BulkOperationsPanel = observer(function BulkOperationsPanel({ class
     if (!isArchiveEnabled) {
       setToast({
         title: t("common.error.label"),
-        type: TOAST_TYPE.ERROR,
+        type: "error",
         message: t("issue.archive.description"),
       });
       return;
@@ -154,8 +154,8 @@ export const BulkOperationsPanel = observer(function BulkOperationsPanel({ class
     bulkUpdateProperties(payload)
       .then(() => {
         setToast({
-          type: TOAST_TYPE.SUCCESS,
-          title: t("success"),
+          type: "success",
+          title: t("common.success"),
           message: `Successfully updated ${propertyCountMessage} for ${issueCountMessage}`,
         });
         return reset({});
@@ -163,7 +163,7 @@ export const BulkOperationsPanel = observer(function BulkOperationsPanel({ class
       .catch(() => {
         setToast({
           title: t("common.error.label"),
-          type: TOAST_TYPE.ERROR,
+          type: "error",
           message: t("common.error.message"),
         });
       })
@@ -178,7 +178,7 @@ export const BulkOperationsPanel = observer(function BulkOperationsPanel({ class
 
     setToast({
       title: t("common.error.label"),
-      type: TOAST_TYPE.ERROR,
+      type: "error",
       message: errorMessages,
     });
   };
@@ -188,7 +188,7 @@ export const BulkOperationsPanel = observer(function BulkOperationsPanel({ class
       <div className={cn("sticky bottom-0 left-0 z-10 h-14", className)}>
         <div className="flex size-full items-center divide-x-[0.5px] divide-subtle-1 border-t border-subtle-1 bg-surface-1 px-3.5 py-4 text-tertiary">
           <div className="flex h-7 flex-shrink-0 items-center gap-2 pr-3 text-13">
-            <Checkbox indeterminate onClick={() => clearSelection()} />
+            <Checkbox indeterminate aria-label={t("common.select")} onClick={() => clearSelection()} />
             <div className="flex items-center gap-1">
               <span className="flex-shrink-0" style={{ minWidth: "8px" }}>
                 {selectedEntityIds.length}
@@ -199,19 +199,20 @@ export const BulkOperationsPanel = observer(function BulkOperationsPanel({ class
           <div className="flex w-full overflow-hidden overflow-x-auto">
             <div className="flex grow">
               <div className="flex h-7 flex-shrink-0 items-center gap-6 px-3">
-                <Tooltip tooltipHeading={t("common.actions.subscribe")} tooltipContent="">
+                <Tooltip label={t("common.actions.subscribe")}>
                   <button
                     type="button"
                     className="grid place-items-center outline-none"
                     onClick={() => setIsSubscribeModalOpen(true)}
                   >
-                    <BellRingIcon className="size-4" />
+                    <SubscribeOutline className="size-4" />
                   </button>
                 </Tooltip>
                 <Tooltip
-                  tooltipHeading={t("common.actions.archive")}
-                  tooltipContent={
-                    isArchiveEnabled ? "" : "The selected work items are not in the right state group to archive"
+                  label={
+                    isArchiveEnabled
+                      ? t("common.actions.archive")
+                      : "The selected work items are not in the right state group to archive"
                   }
                 >
                   <button
@@ -219,18 +220,18 @@ export const BulkOperationsPanel = observer(function BulkOperationsPanel({ class
                     className={cn("grid place-items-center outline-none", { "cursor-not-allowed": !isArchiveEnabled })}
                     onClick={handleOpenArchiveModal}
                   >
-                    <ArchiveIcon />
+                    <ArchiveOutline />
                   </button>
                 </Tooltip>
               </div>
               <div className="flex h-7 flex-shrink-0 items-center gap-3 px-3">
-                <Tooltip tooltipHeading={t("common.actions.delete")} tooltipContent="">
+                <Tooltip label={t("common.actions.delete")}>
                   <button
                     type="button"
                     className="grid place-items-center outline-none"
                     onClick={() => setIsDeleteModalOpen(true)}
                   >
-                    <TrashIcon />
+                    <DeleteOutline />
                   </button>
                 </Tooltip>
               </div>
@@ -241,7 +242,6 @@ export const BulkOperationsPanel = observer(function BulkOperationsPanel({ class
                       <BulkIssueProperties
                         control={control}
                         projectId={projectId}
-                        workspaceSlug={workspaceSlug?.toString()}
                         startDate={watch("start_date")}
                         targetDate={watch("target_date")}
                         handleFormChange={() => {}}
@@ -251,18 +251,22 @@ export const BulkOperationsPanel = observer(function BulkOperationsPanel({ class
                         <div className="flex gap-2">
                           <Button
                             type="button"
-                            variant="neutral-primary"
+                            variant="secondary"
                             size="sm"
-                            className="h-6"
+                            stretch="auto"
+                            label="Reset"
                             onClick={() => reset({})}
                             disabled={isUpdating}
-                          >
-                            Reset
-                          </Button>
+                          />
 
-                          <Button type="submit" variant="primary" size="sm" className="h-6" disabled={isUpdating}>
-                            {isUpdating ? "Updating" : "Update"}
-                          </Button>
+                          <Button
+                            type="submit"
+                            variant="primary"
+                            size="sm"
+                            stretch="auto"
+                            label={isUpdating ? "Updating" : "Update"}
+                            disabled={isUpdating}
+                          />
                         </div>
                       )}
                     </div>
