@@ -5,8 +5,10 @@
  */
 
 import { useForm } from "react-hook-form";
+import { Controller } from "react-hook-form";
 import { ThoughtsOutline } from "@makeplane/propel/icons";
 import { Button } from "@makeplane/propel/components/button";
+import { TextArea, TextAreaGroup } from "@makeplane/propel/components/text-area";
 import type { IFormattedInstanceConfiguration, TInstanceAIConfigurationKeys } from "@plane/types";
 // components
 import type { TControllerInputFormField } from "@/components/common/controller-input";
@@ -34,6 +36,8 @@ export function InstanceAIForm(props: IInstanceAIForm) {
     defaultValues: {
       LLM_API_KEY: config["LLM_API_KEY"],
       LLM_MODEL: config["LLM_MODEL"],
+      LLM_BASE_URL: config["LLM_BASE_URL"],
+      LLM_SYSTEM_PROMPT: config["LLM_SYSTEM_PROMPT"],
     },
   });
 
@@ -82,6 +86,16 @@ export function InstanceAIForm(props: IInstanceAIForm) {
       error: Boolean(errors.LLM_API_KEY),
       required: false,
     },
+    {
+      key: "LLM_BASE_URL",
+      type: "text",
+      label: "Base URL",
+      description:
+        "Optional. Any OpenAI-compatible endpoint (Ollama, vLLM, OpenRouter, etc.). Leave empty to use the default OpenAI API.",
+      placeholder: "https://api.openai.com/v1",
+      error: Boolean(errors.LLM_BASE_URL),
+      required: false,
+    },
   ];
 
   const onSubmit = async (formData: AIFormValues) => {
@@ -105,7 +119,7 @@ export function InstanceAIForm(props: IInstanceAIForm) {
           <div className="pb-1 text-18 font-medium text-primary">OpenAI</div>
           <div className="text-13 font-regular text-tertiary">If you use ChatGPT, this is for you.</div>
         </div>
-        <div className="grid-col grid w-full grid-cols-1 items-center justify-between gap-x-12 gap-y-8 lg:grid-cols-3">
+        <div className="grid-col grid w-full grid-cols-1 items-start justify-between gap-x-12 gap-y-8 lg:grid-cols-3">
           {aiFormFields.map((field) => (
             <ControllerInput
               key={field.key}
@@ -119,6 +133,34 @@ export function InstanceAIForm(props: IInstanceAIForm) {
               required={field.required}
             />
           ))}
+        </div>
+        <div className="space-y-1">
+          <label htmlFor="LLM_SYSTEM_PROMPT" className="text-13 text-tertiary">
+            System prompt
+          </label>
+          <TextAreaGroup resize="vertical">
+            <Controller
+              control={control}
+              name="LLM_SYSTEM_PROMPT"
+              render={({ field: { value, onChange, ref } }) => (
+                <TextArea
+                  size="lg"
+                  surface="field"
+                  rows={4}
+                  id="LLM_SYSTEM_PROMPT"
+                  name="LLM_SYSTEM_PROMPT"
+                  value={value ?? ""}
+                  onChange={onChange}
+                  ref={ref}
+                  placeholder="Leave empty to use the built-in default: guides the assistant to act as Plane's issue-description writer and output only the description text."
+                />
+              )}
+            />
+          </TextAreaGroup>
+          <p className="text-12 text-tertiary">
+            Optional. Sets the assistant&apos;s context and expected output format. Leave empty to use the built-in
+            default.
+          </p>
         </div>
       </div>
 

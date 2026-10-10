@@ -61,6 +61,7 @@ class InstanceEndpoint(BaseAPIView):
             SLACK_CLIENT_ID,
             UNSPLASH_ACCESS_KEY,
             LLM_API_KEY,
+            LLM_BASE_URL,
         ) = get_configuration_value(
             [
                 {
@@ -112,6 +113,10 @@ class InstanceEndpoint(BaseAPIView):
                     "key": "LLM_API_KEY",
                     "default": os.environ.get("LLM_API_KEY", ""),
                 },
+                {
+                    "key": "LLM_BASE_URL",
+                    "default": os.environ.get("LLM_BASE_URL", ""),
+                },
             ]
         )
 
@@ -136,7 +141,7 @@ class InstanceEndpoint(BaseAPIView):
         data["has_unsplash_configured"] = bool(UNSPLASH_ACCESS_KEY)
 
         # Open AI settings
-        data["has_llm_configured"] = bool(LLM_API_KEY)
+        data["has_llm_configured"] = bool(LLM_API_KEY or LLM_BASE_URL)
 
         # File size settings
         data["file_size_limit"] = float(os.environ.get("FILE_SIZE_LIMIT", 5242880))

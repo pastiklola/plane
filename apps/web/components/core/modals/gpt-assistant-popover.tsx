@@ -9,7 +9,7 @@ import { useEffect, useEffectEvent, useState, useRef } from "react";
 import { Controller, useForm } from "react-hook-form"; // services
 import { WarningCircleOutline } from "@makeplane/propel/icons";
 // plane imports
-import { Input, InputGroup } from "@makeplane/propel/components/input";
+import { TextArea, TextAreaGroup } from "@makeplane/propel/components/text-area";
 import { Popover, PopoverBody, PopoverContent, PopoverTrigger } from "@makeplane/propel/components/popover";
 import type { EditorRefApi } from "@plane/editor";
 import { Button } from "@makeplane/propel/components/button";
@@ -146,7 +146,8 @@ export function GptAssistantPopover(props: Props) {
   }, [editorRef, prompt]);
 
   useEffect(() => {
-    responseRef.current?.setEditorValue(`<p>${response}</p>`);
+    // Raw markdown: the editor's tiptap-markdown parses it into proper headings/paragraphs
+    responseRef.current?.setEditorValue(response);
   }, [response, responseRef]);
 
   // Read the latest submit handler (it closes over `prompt` and the workspace props) without
@@ -236,7 +237,7 @@ export function GptAssistantPopover(props: Props) {
                     <RichTextEditor
                       editable={false}
                       id="ai-assistant-response"
-                      initialValue={`<p>${response}</p>`}
+                      initialValue={response}
                       ref={responseRef}
                       workspaceId={workspaceId}
                       workspaceSlug={workspaceSlug}
@@ -256,12 +257,14 @@ export function GptAssistantPopover(props: Props) {
               control={control}
               name="task"
               render={({ field: { value, onChange, ref } }) => (
-                <InputGroup size="2xl">
-                  <Input
+                <TextAreaGroup resize="none">
+                  <TextArea
                     size="2xl"
+                    surface="field"
+                    autoResize
+                    maxRows={8}
                     id="task"
                     name="task"
-                    type="text"
                     value={value}
                     onChange={onChange}
                     ref={ref}
@@ -270,9 +273,10 @@ export function GptAssistantPopover(props: Props) {
                         ? "Tell AI what action to perform on this content..."
                         : "Ask AI anything..."
                     }`}
+                    // eslint-disable-next-line jsx-a11y/no-autofocus
                     autoFocus
                   />
-                </InputGroup>
+                </TextAreaGroup>
               )}
             />
             <div className="flex justify-between gap-2">
