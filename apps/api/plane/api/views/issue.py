@@ -2465,7 +2465,6 @@ class IssueAdvancedSearchEndpoint(BaseAPIView):
                 "id",
                 "name",
                 "sequence_id",
-                project_identifier=F("project__identifier"),
                 "project_id",
                 "workspace_id",
                 "type_id",
@@ -2473,6 +2472,7 @@ class IssueAdvancedSearchEndpoint(BaseAPIView):
                 "priority",
                 "target_date",
                 "start_date",
+                project_identifier=F("project__identifier"),
             )
         )
 
