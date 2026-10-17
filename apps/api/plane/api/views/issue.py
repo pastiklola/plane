@@ -2314,6 +2314,44 @@ class IssueSearchEndpoint(BaseAPIView):
         return Response({"issues": issue_results}, status=status.HTTP_200_OK)
 
 
+# Supported `filters` keys for the advanced search endpoint, as documented in the
+# OpenAPI schema. Kept next to the endpoint so it is updated with the FilterSet;
+# `test_advanced_search_documented_filters_match_filterset` asserts they stay in sync.
+ADVANCED_SEARCH_FILTERS = {
+    "assignee_id": "Assignee user ID. `assignee_id__in` takes a list of IDs.",
+    "cycle_id": "Cycle ID. `cycle_id__in` takes a list of IDs.",
+    "module_id": "Module ID. `module_id__in` takes a list of IDs.",
+    "label_id": "Label ID. `label_id__in` takes a list of IDs.",
+    "mention_id": "Mentioned user ID. `mention_id__in` takes a list of IDs.",
+    "subscriber_id": "Subscriber user ID. `subscriber_id__in` takes a list of IDs.",
+    "created_by_id": "Creator user ID. `created_by_id__in` takes a list of IDs.",
+    "state_id": "State ID. `state_id__in` takes a list of IDs.",
+    "state_group": "State group: backlog, unstarted, started, completed, cancelled. "
+    "`state_group__in` takes a list of groups.",
+    "project_id": "Project ID. `project_id__in` takes a list of IDs.",
+    "priority": "Priority: urgent, high, medium, low, none. Also `priority__exact` and `priority__in`.",
+    "is_draft": "Whether the work item is a draft. Also `is_draft__exact`.",
+    "is_archived": "Whether the work item is archived. Also `is_archived__exact`.",
+    "start_date": "Start date as `YYYY-MM-DD`. `start_date__exact` matches that whole day; "
+    "`start_date__range` takes a CSV pair, e.g. `2026-07-01,2026-07-31`.",
+    "target_date": "Target date as `YYYY-MM-DD`. Also `target_date__exact` and `target_date__range`.",
+    "created_at": "Creation date as `YYYY-MM-DD` (matches the whole day, not just midnight). "
+    "Also `created_at__exact` and `created_at__range`.",
+    "updated_at": "Last update date as `YYYY-MM-DD`. Also `updated_at__exact` and `updated_at__range`.",
+}
+
+ADVANCED_SEARCH_FILTERS_DESCRIPTION = (
+    "Structured filter object, ANDed with `query` when both are given.\n\n"
+    "Keys are filter names and values are a scalar, null, or a list of scalars. "
+    "Grouping keys are `and` (list of filter objects), `or` (list of filter objects) and "
+    "`not` (single filter object); a filter object holds exactly one grouping key and no "
+    "field keys beside it. Nesting is limited to 5 levels. Any other key is rejected with "
+    "400 `invalid_filter_field`, so filters must be applied on the server rather than "
+    "silently ignored.\n\n"
+    "Allowed keys:\n" + "\n".join(f"- `{key}`: {text}" for key, text in ADVANCED_SEARCH_FILTERS.items())
+)
+
+
 class IssueAdvancedSearchEndpoint(BaseAPIView):
     """Advanced search across work items with text query and structured filters"""
 
@@ -2324,7 +2362,14 @@ class IssueAdvancedSearchEndpoint(BaseAPIView):
     @extend_schema(
         operation_id="advanced_search_work_items",
         summary="Advanced search work items",
-        description="Search for work items with advanced filters and search query. Supports workspace-wide or project-specific search.",  # noqa: E501
+        description=(
+            "Search for work items with a text `query` and a structured `filters` object. "
+            "Supports workspace-wide or project-specific search. "
+            "`query` and `filters` combine with AND; when `filters` is omitted every "
+            "readable work item is returned, newest first, capped by `limit`. "
+            "See the `filters` schema description for the supported fields and the request "
+            "examples for AND / OR / NOT grouping."
+        ),
         tags=["Work Items"],
         parameters=[WORKSPACE_SLUG_PARAMETER],
         request=OpenApiRequest(
@@ -2334,11 +2379,16 @@ class IssueAdvancedSearchEndpoint(BaseAPIView):
                     "properties": {
                         "query": {
                             "type": "string",
-                            "description": "Search query string for text-based search across work item fields",
+                            "description": (
+                                "Full-text search over work item name, sequence ID, and project "
+                                "identifier. Optional and independent of `filters`."
+                            ),
                         },
                         "filters": {
                             "type": "object",
-                            "description": "Filter JSON passed through to IssueFilterSet for validation and application",
+                            "description": ADVANCED_SEARCH_FILTERS_DESCRIPTION,
+                            "additionalProperties": True,
+                            "example": {"priority__in": ["high", "urgent"]},
                         },
                         "limit": {
                             "type": "integer",
@@ -2373,6 +2423,38 @@ class IssueAdvancedSearchEndpoint(BaseAPIView):
                         "filters": {"priority__in": ["high", "urgent"]},
                         "workspace_search": True,
                         "limit": 10,
+                    },
+                ),
+                OpenApiExample(
+                    name="Advanced search with OR and NOT grouping",
+                    description=(
+                        "Grouped conditions: open urgent work items, or work items that are not "
+                        "drafts. `and` / `or` take a list of filter objects, `not` a single one."
+                    ),
+                    value={
+                        "filters": {
+                            "and": [
+                                {"state_group__in": ["backlog", "unstarted", "started"]},
+                                {"or": [{"priority__in": ["urgent"]}, {"not": {"is_draft": True}}]},
+                            ]
+                        },
+                        "limit": 25,
+                    },
+                ),
+                OpenApiExample(
+                    name="Advanced search with relation and date filters",
+                    description=(
+                        "Match work items by assignee, cycle, label, or date. Date filters take "
+                        "`YYYY-MM-DD`, or a `YYYY-MM-DD,YYYY-MM-DD` range for the `__range` lookups."
+                    ),
+                    value={
+                        "filters": {
+                            "assignee_id__in": ["550e8400-e29b-41d4-a716-446655440000"],
+                            "cycle_id": "550e8400-e29b-41d4-a716-446655440010",
+                            "target_date__range": "2026-07-01,2026-07-31",
+                            "updated_at__exact": "2026-07-30",
+                        },
+                        "limit": 25,
                     },
                 ),
             ],

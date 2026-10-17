@@ -5,7 +5,9 @@
 import pytest
 from rest_framework import status
 
+from plane.api.views.issue import ADVANCED_SEARCH_FILTERS
 from plane.db.models import Issue, Project, ProjectMember
+from plane.utils.filters import IssueFilterSet
 
 
 @pytest.fixture
@@ -166,3 +168,13 @@ class TestIssueAdvancedSearchEndpoint:
         )
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+
+@pytest.mark.contract
+class TestAdvancedSearchDocumentedFilters:
+    """The documented filter keys must stay in sync with IssueFilterSet."""
+
+    @pytest.mark.django_db
+    def test_documented_filters_match_filterset(self):
+        declared = {name for name in IssueFilterSet.base_filters if "__" not in name}
+        assert set(ADVANCED_SEARCH_FILTERS) == declared
